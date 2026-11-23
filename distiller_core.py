@@ -1,13 +1,13 @@
 import gc
+import io
 import re
 import urllib.request
 from typing import Generator
-import fitz  # PyMuPDF: أسرع وأخف مكتبة لقراءة ملفات PDF
+from pypdf import PdfReader
 
 from vault_storage import KnowledgeVault
 
 
-# 1. تعابير نمطية مترجمة مسبقاً (Pre-compiled Regex) لأقصى سرعة وأقل استهلاك للمعالج
 EQUATION_PATTERN = re.compile(
     r'(?:[A-Za-zأ-ي_][A-Za-z0-9أ-ي_\s\(\)]{1,30}\s*=\s*[^=\n]{3,80}|'
     r'(?:معادلة|صيغة|Formula|Equation)\s*[:\-]\s*[^\n]{4,100})',
@@ -46,7 +46,6 @@ class KnowledgeDistiller:
 
     @staticmethod
     def _extract_keywords(text: str, max_words: int = 6) -> list[str]:
-        """استخراج الكلمات المفتاحية الجوهرية بدون مكتبات ذكاء اصطناعي."""
         tokens = re.findall(r'\b[أ-يa-zA-Z]{3,}\b', text.lower())
         freq: dict[str, int] = {}
         for word in tokens:
@@ -55,7 +54,6 @@ class KnowledgeDistiller:
         return sorted(freq, key=freq.get, reverse=True)[:max_words]
 
     def verify_url(self, url: str) -> bool:
-        """فحص سلامة الرابط مع تخزين النتيجة مؤقتاً لمنع تكرار الفحص لنفس الرابط."""
         if url in self._checked_urls_cache:
             return self._checked_urls_cache[url]
 
@@ -70,9 +68,6 @@ class KnowledgeDistiller:
         return is_ok
 
     def distill_text_chunk(self, book_title: str, raw_text: str, chapter: str = "عام") -> dict:
-        """
-        تقطير كتلة نصية واستخراج المعادلات، القواعد، والإحصائيات، وحفظها في الخزنة.
-        """
         stats_summary = {
             "equations_stored": 0,
             "rules_stored": 0,
@@ -84,12 +79,10 @@ class KnowledgeDistiller:
         if not raw_text or not raw_text.strip():
             return stats_summary
 
-        # 1. فحص الروابط المرجعية داخل النص
         for url in set(URL_PATTERN.findall(raw_text)):
             if not self.verify_url(url):
                 stats_summary["broken_links"].append(url)
 
-        # 2. استخراج وحفظ المعادلات الرياضية
         for match in set(EQUATION_PATTERN.findall(raw_text)):
             clean_eq = " ".join(match.split())
             res = self.vault.store_item(
@@ -104,7 +97,6 @@ class KnowledgeDistiller:
             elif res["status"] == "CACHE_HIT":
                 stats_summary["cache_hits"] += 1
 
-        # 3. استخراج وحفظ القواعد الشرطية المنطقية
         for match in set(RULE_PATTERN.findall(raw_text)):
             clean_rule = " ".join(match.split())
             res = self.vault.store_item(
@@ -119,7 +111,6 @@ class KnowledgeDistiller:
             elif res["status"] == "CACHE_HIT":
                 stats_summary["cache_hits"] += 1
 
-        # 4. استخراج وحفظ الإحصائيات والنسب الموثقة
         for match in set(STAT_PATTERN.findall(raw_text)):
             clean_stat = " ".join(match.split())
             res = self.vault.store_item(
@@ -137,23 +128,19 @@ class KnowledgeDistiller:
         return stats_summary
 
     def _stream_pdf_pages(self, pdf_bytes: bytes) -> Generator[tuple[int, str], None, None]:
-        """مولّد متدفق يقرأ ملف PDF صفحة بصفحة ويحرر الذاكرة فوراً."""
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        stream = io.BytesIO(pdf_bytes)
+        reader = PdfReader(stream)
         try:
-            for page_idx in range(len(doc)):
-                page = doc.load_page(page_idx)
-                text = page.get_text("text")
+            for page_idx, page in enumerate(reader.pages):
+                text = page.extract_text() or ""
                 yield page_idx + 1, text
                 del page, text
         finally:
-            doc.close()
-            del doc
+            stream.close()
+            del reader, stream
             gc.collect()
 
     def distill_pdf_bytes(self, book_title: str, pdf_bytes: bytes) -> dict:
-        """
-        تقطير كتاب PDF كامل عبر القراءة المتدفقة بأقل استهلاك للرام.
-        """
         total_report = {
             "book_title": book_title,
             "pages_processed": 0,
@@ -182,4 +169,4 @@ class KnowledgeDistiller:
         self._checked_urls_cache.clear()
         gc.collect()
         return total_report
-              
+        
