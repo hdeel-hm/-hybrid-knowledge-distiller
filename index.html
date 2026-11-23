@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>محرك تقطير المعرفة الذكي | Smart Knowledge Distiller</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+  .container { max-width: 780px; margin: auto; }
+  .header { text-align: center; padding: 20px 0; }
+  .header h1 { color: #38bdf8; margin-bottom: 6px; font-size: 1.7rem; }
+  .header p { color: #94a3b8; font-size: 0.95rem; margin: 0; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+  label { display: block; margin-bottom: 6px; color: #cbd5e1; font-weight: 600; font-size: 0.9rem; }
+  input, textarea { width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; color: #fff; padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 0.95rem; }
+  input:focus, textarea:focus { outline: none; border-color: #38bdf8; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 200px; }
+  button { background: #0284c7; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; width: 100%; transition: 0.2s; }
+  button:hover { background: #0369a1; }
+  button.secondary { background: #10b981; }
+  button.secondary:hover { background: #059669; }
+  .badge { display: inline-block; background: #0ea5e922; color: #38bdf8; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; margin-bottom: 10px; }
+  .result-box { background: #0f172a; border-right: 4px solid #38bdf8; padding: 14px; border-radius: 8px; margin-top: 14px; white-space: pre-wrap; font-size: 0.92rem; line-height: 1.6; }
+  .warn { border-right-color: #f59e0b; color: #fde68a; }
+  .ok { border-right-color: #10b981; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <span class="badge">توفير 90% من تكاليف الذكاء الاصطناعي • خصوصية تامة</span>
+    <h1>محرك تقطير المعرفة واستخراج القواعد</h1>
+    <p>حوّل الكتب والمراجع إلى قواعد بيانات فورية، ودقّق الروابط والأخطاء بضغطة زر</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="col">
+        <label>اسم مساحتك الخاصة (لحفظ خصوصية بياناتك):</label>
+        <input type="text" id="ws" value="demo" placeholder="اكتب اسماً أو رمزاً خاصاً بك فقط">
+      </div>
+      <div class="col">
+        <label>عنوان الكتاب أو المرجع:</label>
+        <input type="text" id="book" value="مرجع استشاري" placeholder="مثال: دليل التسويق 2026">
+      </div>
+    </div>
+
+    <label>ألصق نصاً أو فصلاً للتقطير والتدقيق:</label>
+    <textarea id="txt" rows="4" placeholder="ألصق هنا أي فقرة تحتوي على معادلات، قوانين، إحصائيات، أو روابط..."></textarea>
+    <button onclick="distillText()">⚡ استخرج الزبدة ودقّق النص</button>
+
+    <div style="margin: 16px 0; text-align: center; color: #64748b;">— أو ارفع ملف كتاب PDF كامل —</div>
+    <input type="file" id="pdfFile" accept=".pdf">
+    <button class="secondary" onclick="distillPdf()">📄 تقطير وتدقيق ملف PDF</button>
+
+    <div id="distillOut"></div>
+  </div>
+
+  <div class="card">
+    <label>🔍 ابحث في خزنة مساحتك الخاصة (بتكلفة $0 وبدون ذكاء اصطناعي):</label>
+    <div class="row">
+      <div class="col" style="flex: 3;">
+        <input type="text" id="q" placeholder="اكتب كلمة مفتاحية (مثال: موثوق، 45k، ROI)...">
+      </div>
+      <div class="col" style="flex: 1;">
+        <button onclick="searchVault()">بحث فوري</button>
+      </div>
+    </div>
+    <div id="searchOut"></div>
+  </div>
+</div>
+
+<script>
+function renderReport(data) {
+  let html = `<div class="result-box ok">✅ تم التحليل في <b>${data.time_ms} مللي ثانية</b> | تم حفظ: <b>${data.stored_count}</b> قاعدة جديدة (مكرر سابقاً: ${data.cached_count})</div>`;
+  if (data.typos && data.typos.length) {
+    html += `<div class="result-box warn">⚠️ <b>تنبيهات إملائية:</b><br>• ${data.typos.join('<br>• ')}</div>`;
+  }
+  if (data.broken_links && data.broken_links.length) {
+    html += `<div class="result-box warn">🔗 <b>روابط معطوبة:</b><br>• ${data.broken_links.join('<br>• ')}</div>`;
+  }
+  const sections = [
+    ['📐 المعادلات والصيغ', data.equations],
+    ['⚖️ القواعد الاستشارية وإشارات الخطر', data.rules],
+    ['🏛️ التشريعات والحوكمة', data.regulations],
+    ['📊 الإحصائيات والمؤشرات', data.stats]
+  ];
+  for (const [title, list] of sections) {
+    if (list && list.length) {
+      html += `<div class="result-box"><b>${title} (${list.length}):</b><br>• ${list.join('<br>• ')}</div>`;
+    }
+  }
+  document.getElementById('distillOut').innerHTML = html;
+}
+
+async function distillText() {
+  const out = document.getElementById('distillOut');
+  out.innerHTML = '<div class="result-box">⏳ جاري التقطير والتدقيق...</div>';
+  const res = await fetch('/api/distill-text', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      workspace_id: document.getElementById('ws').value,
+      book_title: document.getElementById('book').value,
+      text: document.getElementById('txt').value
+    })
+  });
+  renderReport(await res.json());
+}
+
+async function distillPdf() {
+  const fileInput = document.getElementById('pdfFile');
+  if (!fileInput.files.length) return alert('اختر ملف PDF أولاً');
+  const out = document.getElementById('distillOut');
+  out.innerHTML = '<div class="result-box">⏳ جاري قراءة صفحات الـ PDF وتقطيرها...</div>';
+  const fd = new FormData();
+  fd.append('workspace_id', document.getElementById('ws').value);
+  fd.append('book_title', document.getElementById('book').value);
+  fd.append('file', fileInput.files);
+  const res = await fetch('/api/distill-pdf', { method: 'POST', body: fd });
+  renderReport(await res.json());
+}
+
+async function searchVault() {
+  const out = document.getElementById('searchOut');
+  out.innerHTML = '<div class="result-box">⏳ جاري البحث في الخزنة...</div>';
+  const ws = encodeURIComponent(document.getElementById('ws').value);
+  const q = encodeURIComponent(document.getElementById('q').value);
+  const res = await fetch(`/api/search?workspace_id=${ws}&q=${q}`);
+  const data = await res.json();
+  if (data.status === 'LOCAL_HIT') {
+    let html = `<div class="result-box ok">⚡ تم العثور على <b>${data.results.length}</b> نتيجة في <b>${data.time_ms} ms</b> (التكلفة: $0.00)</div>`;
+    for (const r of data.results) {
+      html += `<div class="result-box"><b>[${r.type}]</b> (${r.book} - ${r.location})<br>${r.content}</div>`;
+    }
+    out.innerHTML = html;
+  } else {
+    out.innerHTML = `<div class="result-box warn">🤖 ${data.message || 'لا توجد نتائج مطابقة'}</div>`;
+  }
+}
+</script>
+</body>
+  </html>
+  
